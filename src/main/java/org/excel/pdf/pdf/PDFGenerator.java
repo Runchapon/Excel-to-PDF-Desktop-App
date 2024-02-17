@@ -1,34 +1,40 @@
 package org.excel.pdf.pdf;
 
-import com.itextpdf.io.font.PdfEncodings;
-import com.itextpdf.io.font.constants.StandardFonts;
 import com.itextpdf.kernel.font.PdfFont;
 import com.itextpdf.kernel.font.PdfFontFactory;
 import com.itextpdf.kernel.geom.PageSize;
-import com.itextpdf.kernel.geom.Rectangle;
 import com.itextpdf.kernel.pdf.PdfDocument;
-import com.itextpdf.kernel.pdf.PdfPage;
 import com.itextpdf.kernel.pdf.PdfWriter;
 import com.itextpdf.layout.Document;
+import com.itextpdf.layout.Style;
+import com.itextpdf.layout.borders.Border;
+import com.itextpdf.layout.element.Cell;
 import com.itextpdf.layout.element.Paragraph;
+import com.itextpdf.layout.element.Table;
 import com.itextpdf.layout.element.Text;
-import com.itextpdf.layout.font.FontProvider;
-import com.itextpdf.layout.font.FontSet;
+import com.itextpdf.layout.properties.HorizontalAlignment;
 import com.itextpdf.layout.properties.TextAlignment;
+import com.itextpdf.layout.properties.UnitValue;
 import com.itextpdf.layout.properties.VerticalAlignment;
 
 import java.awt.*;
-import java.beans.Encoder;
+import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.net.URL;
-import java.nio.charset.StandardCharsets;
+import java.time.chrono.ThaiBuddhistDate;
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 import java.util.Objects;
-import java.util.Set;
 
 public class PDFGenerator {
 
-    public static void main(String[] args) throws RuntimeException {
+    public static final String DEST = "iTextHelloWorld.pdf";
+    public static final String ANGSANA_FONT_FILE = "ANGSA.ttf";
+
+    protected PdfFont angsanaFont;
+
+    public static void main(String[] args) throws RuntimeException, URISyntaxException, IOException {
         var pdf = new PDFGenerator();
         try {
             pdf.generate();
@@ -37,65 +43,72 @@ public class PDFGenerator {
         }
     }
 
+    public PDFGenerator() throws URISyntaxException, IOException {
+        URL fontUrl = getClass().getClassLoader().getResource(ANGSANA_FONT_FILE);
+        String fontPath = Objects.requireNonNull(fontUrl).toURI().getPath();
+        angsanaFont = PdfFontFactory.createFont(fontPath);
+    }
+
     public void generate() throws IOException, URISyntaxException {
 
-        PdfWriter pdfWriter = new PdfWriter("iTextHelloWorld.pdf");
+        PdfWriter pdfWriter = new PdfWriter(DEST);
         PdfDocument pdfDoc = new PdfDocument(pdfWriter);
         pdfDoc.addNewPage(PageSize.A4);
         Document document = new Document(pdfDoc);
 
-        URL fontUrl = getClass().getClassLoader().getResource("ANGSA.ttf");
-        String fontPath = Objects.requireNonNull(fontUrl).toURI().getPath();
-        System.out.println(fontPath);
-        PdfFont font = PdfFontFactory.createFont(fontPath);
+        // add header
         Paragraph header = new Paragraph();
         Text text = new Text("บิลค่าเช่าห้อง")
-                .setFont(font)
-                .setFontSize(20);
+                .setFont(angsanaFont)
+                .setFontSize(40);
         header.add(text);
+        header.setTextAlignment(TextAlignment.CENTER)
+                .setVerticalAlignment(VerticalAlignment.BOTTOM);
 
-        for (int i = 1; i <= pdfDoc.getNumberOfPages(); i++) {
-            PdfPage pdfPage = pdfDoc.getPage(i);
-            // When "true": in case the page has a rotation, then new content will be automatically rotated in the
-            // opposite direction. On the rotated page this would look as if new content ignores page rotation.
-            pdfPage.setIgnorePageRotationForContent(true);
+        document.add(header);
 
-            Rectangle pageSize = pdfPage.getPageSize();
-            float x, y;
-            if (pdfPage.getRotation() % 180 == 0) {
-                x = pageSize.getWidth() / 2;
-                y = pageSize.getTop() - 40;
-            } else {
-                x = pageSize.getHeight() / 2;
-                y = pageSize.getRight() - 20;
-            }
-            document.showTextAligned(header, x, y, i, TextAlignment.CENTER, VerticalAlignment.BOTTOM, 0);
+        // add date time of invoice
+        Table subHeader = new Table(UnitValue.createPercentArray(2)).useAllAvailableWidth();
+        subHeader.setBorder(Border.NO_BORDER);
+
+        var monthLabel = getMonthLabel();
+        subHeader.addCell(monthLabel);
+
+        var monthYear = getMonthYear();
+        subHeader.addCell(monthYear);
+
+        document.add(subHeader);
+
+        Table table = new Table(UnitValue.createPercentArray(2)).useAllAvailableWidth();
+        for (int i = 0; i < 16; i++) {
+            table.addCell("");
+            table.addCell(new Cell().setHeight(10));
         }
 
-        // Creating a table
-//        float [] pointColumnWidths = {150F, 150F};
-//        Table table = new Table(pointColumnWidths);
-//
-//        // Adding cells to the table
-//        table.addCell(new Cell().add(new Paragraph("Name")));
-//        table.addCell(new Cell().add(new Paragraph("Raju")));
-//        table.addCell(new Cell().add(new Paragraph("Id")));
-//        table.addCell(new Cell().add(new Paragraph("1001")));
-//        table.addCell(new Cell().add(new Paragraph("Designation")));
-//        table.addCell(new Cell().add(new Paragraph("Programmer")));
-//
-//        document.add(table);
+        document.add(table);
 
         document.close();
     }
 
-    public static String convertToUnicode(String input) {
-        StringBuilder sb = new StringBuilder();
+    private Cell getMonthYear() {
+        Locale thai = new Locale("th", "TH");
+        DateTimeFormatter format = DateTimeFormatter.ofPattern("MMMM yyyy").withLocale(thai);
+        String thaiDateFormat = ThaiBuddhistDate.now().format(format);
+        return new Cell()
+                .add(new Paragraph().add(thaiDateFormat)
+                        .setFont(angsanaFont)
+                        .setFontSize(16))
+                .setHeight(40)
+                .setBorder(Border.NO_BORDER);
+    }
 
-        for (char c : input.toCharArray()) {
-            sb.append("\\u").append(Integer.toHexString((int) c));
-        }
-
-        return sb.toString();
+    private Cell getMonthLabel() {
+        return new Cell()
+                .add(new Paragraph("ประจำเดือน")
+                        .setFont(angsanaFont)
+                        .setFontSize(16))
+                .setHorizontalAlignment(HorizontalAlignment.CENTER)
+                .setHeight(40)
+                .setBorder(Border.NO_BORDER);
     }
 }
